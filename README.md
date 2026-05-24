@@ -16,7 +16,7 @@ make -j$(nproc)
 sudo ./Linux-CS2
 ```
 
-#### Changelog from 19 May 2026:
+#### Changelog from 24 May 2026:
  [+] Added blood WH glow when you hit enemy (with new CS2 update).
  
  [+] Updated Offsets.h for last version.
