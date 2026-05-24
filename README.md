@@ -8,7 +8,7 @@ WH memory patch for CS2 on Linux.
 ```bash
 sudo apt install build-essential cmake git libglfw3-dev libglew-dev libopengl-dev
 cd ~
-git clone https://github.com/islavikfx/Linux-CS2-External.git
+git clone https://github.com/16Artem/Linux-CS2-External.git
 cd Linux-CS2-External/
 mkdir -p build && cd build/
 cmake ..
