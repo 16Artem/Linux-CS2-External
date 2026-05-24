@@ -6,7 +6,7 @@ WH memory patch for CS2 on Linux.
 
 ### Run CS2 and open terminal, type this:
 ```bash
-sudo apt install build-essential cmake git libglfw3-dev libglew-dev libopengl-dev
+sudo pacman -S base-devel cmake git glfw-x11 glew mesa
 cd ~
 git clone https://github.com/16Artem/Linux-CS2-External.git
 cd Linux-CS2-External/
