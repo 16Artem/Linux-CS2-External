@@ -1,6 +1,5 @@
 #pragma once
 
-
 class Menu {
 public:
     static bool Setup();
@@ -13,4 +12,5 @@ public:
     static bool IsVisible();
     static void SetCurrentFPS(float fps);
     static float GetCurrentFPS();
+    static void SetWindowSize(int width, int height);
 };

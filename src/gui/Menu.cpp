@@ -7,21 +7,19 @@
 #include <sstream>
 #include <iomanip>
 
-
 static bool g_running = true;
 static bool g_minimized = false;
 static bool g_wallhack_enabled = false;
 static float g_currentFPS = 0.0f;
 static GLFWwindow* g_window = nullptr;
-static int g_fullWidth = 280;
-static int g_fullHeight = 200;
+static int g_displayWidth = 1280;
+static int g_displayHeight = 720;
 static int g_miniWidth = 80;
 static int g_miniHeight = 30;
 static int g_windowPosX = 100;
 static int g_windowPosY = 100;
 static bool g_dragging = false;
 static ImVec2 g_dragOffset;
-
 
 bool Menu::Setup() {
     if (!glfwInit()) return false;
@@ -34,7 +32,7 @@ bool Menu::Setup() {
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     
-    g_window = glfwCreateWindow(g_fullWidth, g_fullHeight, "@islavikfx", nullptr, nullptr);
+    g_window = glfwCreateWindow(g_displayWidth, g_displayHeight, "CS2 Menu", nullptr, nullptr);
     if (!g_window) {
         glfwTerminate();
         return false;
@@ -44,16 +42,18 @@ bool Menu::Setup() {
     glfwMakeContextCurrent(g_window);
     glfwSwapInterval(1);
 
+    // Перетаскивание только за область с текстом "CS2 Menu" (левый верхний угол)
     glfwSetMouseButtonCallback(g_window, [](GLFWwindow* win, int button, int action, int) {
         if (button == GLFW_MOUSE_BUTTON_LEFT) {
             if (action == GLFW_PRESS) {
                 double xpos, ypos;
                 glfwGetCursorPos(win, &xpos, &ypos);
-                g_dragging = true;
-                g_dragOffset = ImVec2(xpos, ypos);
-            } else
-            
-            if (action == GLFW_RELEASE) {
+                // Проверяем, что курсор в области текста "CS2 Menu" (x: 0-120, y: 0-35)
+                if (xpos >= 0 && xpos <= 120 && ypos >= 0 && ypos <= 35) {
+                    g_dragging = true;
+                    g_dragOffset = ImVec2(xpos, ypos);
+                }
+            } else if (action == GLFW_RELEASE) {
                 g_dragging = false;
             }
         }
@@ -78,28 +78,35 @@ bool Menu::Setup() {
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
     
-    style.WindowRounding = 12.0f;
-    style.WindowBorderSize = 3.0f;
-    style.WindowPadding = ImVec2(15, 15);
-    style.ItemSpacing = ImVec2(10, 10);
-    style.FramePadding = ImVec2(6, 4);
-    style.ScrollbarSize = 0.0f;
+    // Прямые углы без закруглений
+    style.WindowRounding = 0.0f;
+    style.ChildRounding = 0.0f;
+    style.FrameRounding = 0.0f;
+    style.PopupRounding = 0.0f;
+    style.ScrollbarRounding = 0.0f;
+    style.GrabRounding = 0.0f;
+    style.TabRounding = 0.0f;
     
+    style.WindowBorderSize = 1.0f;
+    style.WindowPadding = ImVec2(10, 10);
+    style.ItemSpacing = ImVec2(8, 8);
+    style.FramePadding = ImVec2(8, 4);
+    
+    // Белый фон для окна
     ImVec4* colors = style.Colors;
-    colors[ImGuiCol_WindowBg] = ImVec4(0.08f, 0.08f, 0.08f, 0.92f);
-    colors[ImGuiCol_Border] = ImVec4(0.9f, 0.3f, 0.9f, 1.0f);
-    colors[ImGuiCol_Text] = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-    colors[ImGuiCol_CheckMark] = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
-    colors[ImGuiCol_FrameBg] = ImVec4(0.2f, 0.2f, 0.2f, 0.8f);
-    colors[ImGuiCol_FrameBgHovered] = ImVec4(0.25f, 0.25f, 0.25f, 0.9f);
-    colors[ImGuiCol_FrameBgActive] = ImVec4(0.3f, 0.3f, 0.3f, 0.9f);
+    colors[ImGuiCol_WindowBg] = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);  // Белый
+    colors[ImGuiCol_Border] = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);     // Светло-серый
+    colors[ImGuiCol_Text] = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);       // Черный текст
+    colors[ImGuiCol_CheckMark] = ImVec4(0.2f, 0.6f, 1.0f, 1.0f);   // Синяя галочка
+    colors[ImGuiCol_FrameBg] = ImVec4(0.95f, 0.95f, 0.95f, 1.0f);
+    colors[ImGuiCol_FrameBgHovered] = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
+    colors[ImGuiCol_FrameBgActive] = ImVec4(0.85f, 0.85f, 0.85f, 1.0f);
     
     ImGui_ImplGlfw_InitForOpenGL(g_window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
     return true;
 }
-
 
 void Menu::Shutdown() {
     ImGui_ImplOpenGL3_Shutdown();
@@ -113,7 +120,6 @@ void Menu::Shutdown() {
     
     glfwTerminate();
 }
-
 
 void Menu::Render() {
     glfwPollEvents();
@@ -146,7 +152,7 @@ void Menu::Render() {
         
         ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
         ImGui::SetCursorPosY((windowHeight - ImGui::GetTextLineHeight()) * 0.5f);
-        ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.9f, 1.0f), "%s", text.c_str());
+        ImGui::TextColored(ImVec4(0.0f, 0.0f, 0.0f, 1.0f), "%s", text.c_str());
         
         if (ImGui::IsMouseClicked(0) && 
             ImGui::GetIO().MousePos.x > windowPos.x && 
@@ -154,105 +160,114 @@ void Menu::Render() {
             ImGui::GetIO().MousePos.y > windowPos.y && 
             ImGui::GetIO().MousePos.y < windowPos.y + windowHeight) {
             g_minimized = false;
-            glfwSetWindowSize(g_window, g_fullWidth, g_fullHeight);
+            glfwSetWindowSize(g_window, g_displayWidth, g_displayHeight);
         }
         
     } else {
-
+        // Верхняя панель (только фон, без возможности перетаскивания за всю панель)
+        drawList->AddRectFilled(windowPos, ImVec2(windowPos.x + windowWidth, windowPos.y + 35), 
+                                IM_COL32(240, 240, 240, 255), 0);
+        
+        // Кнопка закрытия
         ImVec2 closePos(windowPos.x + windowWidth - 35, windowPos.y + 5);
-        ImVec2 minusPos(windowPos.x + windowWidth - 60, windowPos.y + 5);
+        
+        bool closeHovered = (ImGui::GetIO().MousePos.x > closePos.x && 
+                             ImGui::GetIO().MousePos.x < closePos.x + 25 &&
+                             ImGui::GetIO().MousePos.y > closePos.y && 
+                             ImGui::GetIO().MousePos.y < closePos.y + 25);
+        
+        if (closeHovered) {
+            drawList->AddRectFilled(closePos, ImVec2(closePos.x + 25, closePos.y + 25), 
+                                    IM_COL32(255, 100, 100, 255), 0);
+            if (ImGui::IsMouseClicked(0)) {
+                g_running = false;
+            }
+        } else {
+            drawList->AddRectFilled(closePos, ImVec2(closePos.x + 25, closePos.y + 25), 
+                                    IM_COL32(230, 230, 230, 255), 0);
+        }
+        drawList->AddLine(ImVec2(closePos.x + 8, closePos.y + 8), 
+                          ImVec2(closePos.x + 17, closePos.y + 17), 
+                          IM_COL32(100, 100, 100, 255), 2.0f);
+        drawList->AddLine(ImVec2(closePos.x + 17, closePos.y + 8), 
+                          ImVec2(closePos.x + 8, closePos.y + 17), 
+                          IM_COL32(100, 100, 100, 255), 2.0f);
+        
+        // Кнопка минимизации
+        ImVec2 minusPos(windowPos.x + windowWidth - 65, windowPos.y + 5);
         
         bool minusHovered = (ImGui::GetIO().MousePos.x > minusPos.x && 
-        ImGui::GetIO().MousePos.x < minusPos.x + 18 &&
-        ImGui::GetIO().MousePos.y > minusPos.y && 
-        ImGui::GetIO().MousePos.y < minusPos.y + 18);
+                             ImGui::GetIO().MousePos.x < minusPos.x + 25 &&
+                             ImGui::GetIO().MousePos.y > minusPos.y && 
+                             ImGui::GetIO().MousePos.y < minusPos.y + 25);
         
         if (minusHovered) {
-            drawList->AddRectFilled(minusPos, ImVec2(minusPos.x + 18, minusPos.y + 18), 
-            IM_COL32(150, 50, 50, 255), 4);
+            drawList->AddRectFilled(minusPos, ImVec2(minusPos.x + 25, minusPos.y + 25), 
+                                    IM_COL32(220, 220, 220, 255), 0);
             if (ImGui::IsMouseClicked(0)) {
                 g_minimized = true;
                 glfwSetWindowSize(g_window, g_miniWidth, g_miniHeight);
             }
         } else {
-
-            drawList->AddRect(minusPos, ImVec2(minusPos.x + 18, minusPos.y + 18), 
-            IM_COL32(255, 80, 80, 255), 4);
+            drawList->AddRectFilled(minusPos, ImVec2(minusPos.x + 25, minusPos.y + 25), 
+                                    IM_COL32(230, 230, 230, 255), 0);
         }
-        drawList->AddLine(ImVec2(minusPos.x + 4, minusPos.y + 9), 
-        ImVec2(minusPos.x + 14, minusPos.y + 9), 
-        IM_COL32(255, 80, 80, 255), 2.0f);
+        drawList->AddLine(ImVec2(minusPos.x + 8, minusPos.y + 12), 
+                          ImVec2(minusPos.x + 17, minusPos.y + 12), 
+                          IM_COL32(100, 100, 100, 255), 2.0f);
         
-        bool closeHovered = (ImGui::GetIO().MousePos.x > closePos.x && 
-        ImGui::GetIO().MousePos.x < closePos.x + 18 &&
-        ImGui::GetIO().MousePos.y > closePos.y && 
-        ImGui::GetIO().MousePos.y < closePos.y + 18);
+        // Область с текстом "CS2 Menu" - за нее можно перетаскивать окно
+        // Рисуем подсветку при наведении для индикации, что здесь можно перетаскивать
+        ImVec2 dragAreaPos(windowPos.x, windowPos.y);
+        ImVec2 dragAreaEnd(windowPos.x + 120, windowPos.y + 35);
         
-        if (closeHovered) {
-            drawList->AddRectFilled(closePos, ImVec2(closePos.x + 18, closePos.y + 18), 
-                                    IM_COL32(150, 50, 50, 255), 4);
-            if (ImGui::IsMouseClicked(0)) {
-                g_running = false;
-            }
-        } else {
+        bool dragAreaHovered = (ImGui::GetIO().MousePos.x > dragAreaPos.x && 
+                                ImGui::GetIO().MousePos.x < dragAreaEnd.x &&
+                                ImGui::GetIO().MousePos.y > dragAreaPos.y && 
+                                ImGui::GetIO().MousePos.y < dragAreaEnd.y);
         
-            drawList->AddRect(closePos, ImVec2(closePos.x + 18, closePos.y + 18), 
-            IM_COL32(255, 80, 80, 255), 4);
+        if (dragAreaHovered) {
+            drawList->AddRectFilled(dragAreaPos, dragAreaEnd, IM_COL32(230, 230, 250, 80), 0);
         }
-        drawList->AddLine(ImVec2(closePos.x + 4, closePos.y + 4), 
-        ImVec2(closePos.x + 14, closePos.y + 14), 
-        IM_COL32(255, 80, 80, 255), 2.0f);
-        drawList->AddLine(ImVec2(closePos.x + 14, closePos.y + 4), 
-        ImVec2(closePos.x + 4, closePos.y + 14), 
-        IM_COL32(255, 80, 80, 255), 2.0f);
         
-        ImGui::SetWindowFontScale(0.8f);
-        std::string title = "Linux CS2 by @islavikfx";
-        ImGui::SetCursorPosX(15);
-        ImGui::SetCursorPosY(8);
-        ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "%s", title.c_str());
+        // Название в левом верхнем углу (за эту область можно перетаскивать)
+        ImGui::SetCursorPos(ImVec2(15, 10));
+        ImGui::SetWindowFontScale(1.2f);
+        ImGui::TextColored(ImVec4(0.0f, 0.0f, 0.0f, 1.0f), "CS2 Menu");
         ImGui::SetWindowFontScale(1.0f);
         
-        ImVec2 lineStart(windowPos.x + 10, windowPos.y + 32);
-        ImVec2 lineEnd(windowPos.x + windowWidth - 10, windowPos.y + 32);
-        drawList->AddLine(lineStart, lineEnd, IM_COL32(255, 80, 80, 255), 2.0f);
+        // Разделительная линия под заголовком
+        drawList->AddLine(ImVec2(windowPos.x, windowPos.y + 35), 
+                          ImVec2(windowPos.x + windowWidth, windowPos.y + 35), 
+                          IM_COL32(220, 220, 220, 255), 1.0f);
         
-
-        ImGui::SetCursorPosY(42);
-        ImGui::SetCursorPosX(20);
-        ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.9f, 1.0f), "INFO");
-        ImGui::SetCursorPosY(65);
-        ImGui::SetCursorPosX(25);
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 6));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+        // Переключатель Wallhack: текст слева, переключатель справа от текста
+        ImGui::SetCursorPos(ImVec2(20, 55));
+        ImGui::TextColored(ImVec4(0.0f, 0.0f, 0.0f, 1.0f), "Wallhack");
         
-        ImGui::Checkbox(" Wallhack", &g_wallhack_enabled);
-        ImGui::PopStyleVar(2);
-        ImGui::SetCursorPosY(105);
-        ImGui::SetCursorPosX(20);
+        // Переключатель рядом с текстом
+        ImGui::SameLine(0.0f, 10.0f);
+        ImGui::Checkbox("##Wallhack", &g_wallhack_enabled);
         
-        drawList->AddLine(ImVec2(windowPos.x + 10, windowPos.y + 100), 
-        ImVec2(windowPos.x + windowWidth - 10, windowPos.y + 100), 
-        IM_COL32(80, 80, 80, 100), 1.0f);
-        ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.9f, 1.0f), "STATUS");
+        // Статус ON/OFF рядом с переключателем
+        ImGui::SameLine(0.0f, 10.0f);
+        if (g_wallhack_enabled) {
+            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "ON");
+        } else {
+            ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), "OFF");
+        }
         
-        ImGui::SetCursorPosY(128);
-        ImGui::SetCursorPosX(25);
-        ImVec4 statusColor = g_wallhack_enabled ? 
-        ImVec4(0.2f, 1.0f, 0.2f, 1.0f) : ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
-        std::string statusText = g_wallhack_enabled ? "ON" : "OFF";
-        
-        ImGui::Text("Wallhack: ");
-        ImGui::SameLine(0.0f, 5.0f);
-        ImGui::TextColored(statusColor, "%s", statusText.c_str());
-        ImGui::SetCursorPosY(windowHeight - 25);
-        ImGui::SetCursorPosX(10);
-        
+        // FPS снизу
+        ImGui::SetCursorPos(ImVec2(20, windowHeight - 30));
         std::ostringstream fpsStream;
-        fpsStream << "Menu FPS: " << std::fixed << std::setprecision(0) << g_currentFPS;
+        fpsStream << "FPS: " << std::fixed << std::setprecision(0) << g_currentFPS;
         std::string fpsText = fpsStream.str();
-        ImVec4 fpsColor = ImVec4(0.6f, 0.6f, 0.6f, 0.8f);
-        ImGui::TextColored(fpsColor, "%s", fpsText.c_str());
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s", fpsText.c_str());
+        
+        // Размер окна снизу справа
+        ImGui::SetCursorPos(ImVec2(windowWidth - 120, windowHeight - 30));
+        std::string resolutionText = std::to_string(g_displayWidth) + "x" + std::to_string(g_displayHeight);
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s", resolutionText.c_str());
     }
 
     ImGui::End();
@@ -261,31 +276,27 @@ void Menu::Render() {
     int display_w, display_h;
     glfwGetFramebufferSize(g_window, &display_w, &display_h);
     glViewport(0, 0, display_w, display_h);
-    glClearColor(0, 0, 0, 0);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);  // Белый фон
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     glfwSwapBuffers(g_window);
 }
 
-
 bool Menu::IsRunning() {
     return g_running && !glfwWindowShouldClose(g_window);
 }
-
 
 void Menu::SetWallhackEnabled(bool enabled) {
     g_wallhack_enabled = enabled;
 }
 
-
 bool Menu::IsWallhackEnabled() {
     return g_wallhack_enabled;
 }
 
-
 void Menu::SetVisible(bool visible) {
     if (visible) {
-        glfwSetWindowSize(g_window, g_fullWidth, g_fullHeight);
+        glfwSetWindowSize(g_window, g_displayWidth, g_displayHeight);
         g_minimized = false;
     } else {
         glfwSetWindowSize(g_window, g_miniWidth, g_miniHeight);
@@ -293,16 +304,13 @@ void Menu::SetVisible(bool visible) {
     }
 }
 
-
 bool Menu::IsVisible() {
     return !g_minimized;
 }
 
-
 void Menu::SetCurrentFPS(float fps) {
     g_currentFPS = fps;
 }
-
 
 float Menu::GetCurrentFPS() {
     return g_currentFPS;
