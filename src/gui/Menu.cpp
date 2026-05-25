@@ -39,6 +39,30 @@ static void RenderCrosshairOverlay() {
     }
     if (!wantVisible) return;
 
+    // Keep the overlay sized to the primary monitor (handles resolution
+    // changes from CS2) and pinned above other windows each frame.
+    if (GLFWmonitor* primary = glfwGetPrimaryMonitor()) {
+        if (const GLFWvidmode* mode = glfwGetVideoMode(primary)) {
+            int mx = 0, my = 0;
+            glfwGetMonitorPos(primary, &mx, &my);
+            int cur_w, cur_h, cur_x, cur_y;
+            glfwGetWindowSize(g_overlay_window, &cur_w, &cur_h);
+            glfwGetWindowPos(g_overlay_window, &cur_x, &cur_y);
+            if (cur_w != mode->width || cur_h != mode->height) {
+                glfwSetWindowSize(g_overlay_window, mode->width, mode->height);
+                g_screen_width = mode->width;
+                g_screen_height = mode->height;
+            }
+            if (cur_x != mx || cur_y != my) {
+                glfwSetWindowPos(g_overlay_window, mx, my);
+            }
+        }
+    }
+    glfwSetWindowAttrib(g_overlay_window, GLFW_FLOATING, GLFW_TRUE);
+#ifdef GLFW_MOUSE_PASSTHROUGH
+    glfwSetWindowAttrib(g_overlay_window, GLFW_MOUSE_PASSTHROUGH, GLFW_TRUE);
+#endif
+
     glfwMakeContextCurrent(g_overlay_window);
 
     int ow, oh;
@@ -136,6 +160,8 @@ bool Menu::Setup() {
     // Click-through transparent fullscreen overlay for the crosshair.
     GLFWmonitor* primary = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = primary ? glfwGetVideoMode(primary) : nullptr;
+    int monitor_x = 0, monitor_y = 0;
+    if (primary) glfwGetMonitorPos(primary, &monitor_x, &monitor_y);
     if (mode) {
         g_screen_width = mode->width;
         g_screen_height = mode->height;
@@ -158,7 +184,7 @@ bool Menu::Setup() {
     g_overlay_window = glfwCreateWindow(g_screen_width, g_screen_height,
                                         "Crosshair", nullptr, nullptr);
     if (g_overlay_window) {
-        glfwSetWindowPos(g_overlay_window, 0, 0);
+        glfwSetWindowPos(g_overlay_window, monitor_x, monitor_y);
         glfwSetWindowAttrib(g_overlay_window, GLFW_FLOATING, GLFW_TRUE);
 #ifdef GLFW_MOUSE_PASSTHROUGH
         glfwSetWindowAttrib(g_overlay_window, GLFW_MOUSE_PASSTHROUGH, GLFW_TRUE);
