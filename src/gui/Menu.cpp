@@ -13,6 +13,9 @@ static bool g_wallhack_enabled = false;
 static bool g_crosshair_enabled = false;
 static float g_currentFPS = 0.0f;
 static GLFWwindow* g_window = nullptr;
+static GLFWwindow* g_overlay_window = nullptr;
+static int g_screen_width = 1920;
+static int g_screen_height = 1080;
 static int g_displayWidth = 1280;
 static int g_displayHeight = 720;
 static int g_miniWidth = 80;
@@ -22,6 +25,55 @@ static int g_windowPosY = 100;
 static bool g_dragging = false;
 static double g_dragStartX = 0, g_dragStartY = 0;
 static int g_windowStartX = 0, g_windowStartY = 0;
+
+static void RenderCrosshairOverlay() {
+    if (!g_overlay_window) return;
+
+    bool wantVisible = g_crosshair_enabled;
+    bool isVisible = glfwGetWindowAttrib(g_overlay_window, GLFW_VISIBLE) != 0;
+    if (wantVisible && !isVisible) {
+        glfwShowWindow(g_overlay_window);
+    } else if (!wantVisible && isVisible) {
+        glfwHideWindow(g_overlay_window);
+        return;
+    }
+    if (!wantVisible) return;
+
+    glfwMakeContextCurrent(g_overlay_window);
+
+    int ow, oh;
+    glfwGetFramebufferSize(g_overlay_window, &ow, &oh);
+    glViewport(0, 0, ow, oh);
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0.0, (double)ow, (double)oh, 0.0, -1.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    float cx = ow * 0.5f;
+    float cy = oh * 0.5f;
+    float size = 10.0f;
+    float gap = 3.0f;
+
+    glLineWidth(2.0f);
+    glColor4f(0.2f, 1.0f, 0.2f, 1.0f);
+    glBegin(GL_LINES);
+        glVertex2f(cx - size, cy); glVertex2f(cx - gap, cy);
+        glVertex2f(cx + gap, cy);  glVertex2f(cx + size, cy);
+        glVertex2f(cx, cy - size); glVertex2f(cx, cy - gap);
+        glVertex2f(cx, cy + gap);  glVertex2f(cx, cy + size);
+    glEnd();
+
+    glfwSwapBuffers(g_overlay_window);
+    glfwMakeContextCurrent(g_window);
+}
 
 bool Menu::Setup() {
     if (!glfwInit()) return false;
@@ -81,6 +133,42 @@ bool Menu::Setup() {
     ImGui_ImplGlfw_InitForOpenGL(g_window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
+    // Click-through transparent fullscreen overlay for the crosshair.
+    GLFWmonitor* primary = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = primary ? glfwGetVideoMode(primary) : nullptr;
+    if (mode) {
+        g_screen_width = mode->width;
+        g_screen_height = mode->height;
+    }
+
+    glfwDefaultWindowHints();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
+    glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_FALSE);
+    glfwWindowHint(GLFW_FOCUSED, GLFW_FALSE);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+#ifdef GLFW_MOUSE_PASSTHROUGH
+    glfwWindowHint(GLFW_MOUSE_PASSTHROUGH, GLFW_TRUE);
+#endif
+
+    g_overlay_window = glfwCreateWindow(g_screen_width, g_screen_height,
+                                        "Crosshair", nullptr, nullptr);
+    if (g_overlay_window) {
+        glfwSetWindowPos(g_overlay_window, 0, 0);
+        glfwSetWindowAttrib(g_overlay_window, GLFW_FLOATING, GLFW_TRUE);
+#ifdef GLFW_MOUSE_PASSTHROUGH
+        glfwSetWindowAttrib(g_overlay_window, GLFW_MOUSE_PASSTHROUGH, GLFW_TRUE);
+#endif
+        glfwMakeContextCurrent(g_overlay_window);
+        glfwSwapInterval(0);
+    }
+
+    glfwMakeContextCurrent(g_window);
+
     return true;
 }
 
@@ -91,6 +179,10 @@ void Menu::Shutdown() {
     ImGui::DestroyContext();
     
     // Затем уничтожаем окно
+    if (g_overlay_window) {
+        glfwDestroyWindow(g_overlay_window);
+        g_overlay_window = nullptr;
+    }
     if (g_window) {
         glfwDestroyWindow(g_window);
         g_window = nullptr;
@@ -271,6 +363,8 @@ void Menu::Render() {
     glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     glfwSwapBuffers(g_window);
+
+    RenderCrosshairOverlay();
 }
 
 bool Menu::IsRunning() {
@@ -283,6 +377,14 @@ void Menu::SetWallhackEnabled(bool enabled) {
 
 bool Menu::IsWallhackEnabled() {
     return g_wallhack_enabled;
+}
+
+void Menu::SetCrosshairEnabled(bool enabled) {
+    g_crosshair_enabled = enabled;
+}
+
+bool Menu::IsCrosshairEnabled() {
+    return g_crosshair_enabled;
 }
 
 void Menu::SetVisible(bool visible) {
