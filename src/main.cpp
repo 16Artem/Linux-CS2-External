@@ -44,11 +44,12 @@ bool InitializeCS2() {
     
     g_patch_addr = g_client_base + Offsets::xray;
     std::cout << "[+] CS2 found. PID: " << g_cs2_pid << "." << std::endl;
-    
+    Menu::SetCS2Pid(g_cs2_pid);
+
     if (!ValidateOffset()) {
         return false;
     }
-    
+
     return true;
 }
 
@@ -59,11 +60,12 @@ void FindCS2() {
         if (ProcessManager::FindProcess("cs2", pid)) {
             if (pid != g_cs2_pid) {
                 g_cs2_pid = pid;
+                Menu::SetCS2Pid(g_cs2_pid);
                 uintptr_t base = ProcessManager::GetModuleBase(pid, "libclient.so");
                 if (base != 0) {
                     g_client_base = base;
                     g_patch_addr = base + Offsets::xray;
-                    std::cout << "[+] CS2 reconnected." 
+                    std::cout << "[+] CS2 reconnected."
                               << std::hex << g_patch_addr << std::endl;
                 }
             }
@@ -76,6 +78,7 @@ void FindCS2() {
             g_cs2_pid = 0;
             g_client_base = 0;
             g_patch_addr = 0;
+            Menu::SetCS2Pid(0);
         }
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }

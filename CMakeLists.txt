@@ -9,6 +9,7 @@ set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/src/imgui)
 find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(Threads REQUIRED)
+find_package(X11 REQUIRED)
 
 
 add_executable(${PROJECT_NAME}
@@ -34,4 +35,7 @@ target_link_libraries(${PROJECT_NAME}
     ${OPENGL_LIBRARIES}
     glfw
     dl
+    ${X11_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT})
+
+target_include_directories(${PROJECT_NAME} PRIVATE ${X11_INCLUDE_DIR})

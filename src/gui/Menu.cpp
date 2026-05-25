@@ -3,6 +3,10 @@
 #include "../imgui/backends/imgui_impl_glfw.h"
 #include "../imgui/backends/imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
+#include <cstdint>
+#include <cstring>
 #include <string>
 #include <sstream>
 #include <iomanip>
@@ -16,6 +20,68 @@ static GLFWwindow* g_window = nullptr;
 static GLFWwindow* g_overlay_window = nullptr;
 static int g_screen_width = 1920;
 static int g_screen_height = 1080;
+static uint32_t g_cs2_pid = 0;
+static Display* g_x_display = nullptr;
+static Atom g_atom_net_wm_pid = None;
+static Atom g_atom_net_wm_state = None;
+static Atom g_atom_net_wm_state_above = None;
+static Atom g_atom_net_wm_window_type = None;
+static Atom g_atom_net_wm_window_type_dock = None;
+
+static Window FindWindowByPidRecursive(Display* dpy, Window root, uint32_t pid) {
+    Window dummy_root, parent;
+    Window* children = nullptr;
+    unsigned int nchildren = 0;
+    if (!XQueryTree(dpy, root, &dummy_root, &parent, &children, &nchildren)) {
+        return 0;
+    }
+
+    Window result = 0;
+    for (unsigned int i = 0; i < nchildren && result == 0; ++i) {
+        Atom actual_type;
+        int actual_format;
+        unsigned long nitems = 0, bytes_after = 0;
+        unsigned char* prop = nullptr;
+        if (XGetWindowProperty(dpy, children[i], g_atom_net_wm_pid, 0, 1,
+                               False, XA_CARDINAL, &actual_type, &actual_format,
+                               &nitems, &bytes_after, &prop) == Success && prop) {
+            if (nitems > 0) {
+                uint32_t wpid = *reinterpret_cast<uint32_t*>(prop);
+                if (wpid == pid) {
+                    result = children[i];
+                }
+            }
+            XFree(prop);
+        }
+        if (result == 0) {
+            result = FindWindowByPidRecursive(dpy, children[i], pid);
+        }
+    }
+
+    if (children) XFree(children);
+    return result;
+}
+
+static bool GetCS2WindowGeometry(int& x, int& y, int& w, int& h) {
+    if (!g_x_display || g_cs2_pid == 0) return false;
+
+    Window root = DefaultRootWindow(g_x_display);
+    Window win = FindWindowByPidRecursive(g_x_display, root, g_cs2_pid);
+    if (win == 0) return false;
+
+    XWindowAttributes attrs;
+    if (!XGetWindowAttributes(g_x_display, win, &attrs)) return false;
+
+    int abs_x = 0, abs_y = 0;
+    Window child;
+    XTranslateCoordinates(g_x_display, win, root, 0, 0, &abs_x, &abs_y, &child);
+
+    x = abs_x;
+    y = abs_y;
+    w = attrs.width;
+    h = attrs.height;
+    return w > 0 && h > 0;
+}
 static int g_displayWidth = 1280;
 static int g_displayHeight = 720;
 static int g_miniWidth = 80;
@@ -29,7 +95,13 @@ static int g_windowStartX = 0, g_windowStartY = 0;
 static void RenderCrosshairOverlay() {
     if (!g_overlay_window) return;
 
-    bool wantVisible = g_crosshair_enabled;
+    // Find the CS2 window. If we cannot locate it, hide the overlay — we
+    // only ever want the crosshair drawn over the CS2 game window itself,
+    // not over the menu, desktop, or other windows.
+    int cs_x = 0, cs_y = 0, cs_w = 0, cs_h = 0;
+    bool haveCS2 = g_crosshair_enabled && GetCS2WindowGeometry(cs_x, cs_y, cs_w, cs_h);
+
+    bool wantVisible = haveCS2;
     bool isVisible = glfwGetWindowAttrib(g_overlay_window, GLFW_VISIBLE) != 0;
     if (wantVisible && !isVisible) {
         glfwShowWindow(g_overlay_window);
@@ -39,24 +111,18 @@ static void RenderCrosshairOverlay() {
     }
     if (!wantVisible) return;
 
-    // Keep the overlay sized to the primary monitor (handles resolution
-    // changes from CS2) and pinned above other windows each frame.
-    if (GLFWmonitor* primary = glfwGetPrimaryMonitor()) {
-        if (const GLFWvidmode* mode = glfwGetVideoMode(primary)) {
-            int mx = 0, my = 0;
-            glfwGetMonitorPos(primary, &mx, &my);
-            int cur_w, cur_h, cur_x, cur_y;
-            glfwGetWindowSize(g_overlay_window, &cur_w, &cur_h);
-            glfwGetWindowPos(g_overlay_window, &cur_x, &cur_y);
-            if (cur_w != mode->width || cur_h != mode->height) {
-                glfwSetWindowSize(g_overlay_window, mode->width, mode->height);
-                g_screen_width = mode->width;
-                g_screen_height = mode->height;
-            }
-            if (cur_x != mx || cur_y != my) {
-                glfwSetWindowPos(g_overlay_window, mx, my);
-            }
-        }
+    // Match the overlay's geometry to the CS2 window so the framebuffer
+    // center coincides with the CS2 viewport center.
+    int cur_w, cur_h, cur_x, cur_y;
+    glfwGetWindowSize(g_overlay_window, &cur_w, &cur_h);
+    glfwGetWindowPos(g_overlay_window, &cur_x, &cur_y);
+    if (cur_w != cs_w || cur_h != cs_h) {
+        glfwSetWindowSize(g_overlay_window, cs_w, cs_h);
+        g_screen_width = cs_w;
+        g_screen_height = cs_h;
+    }
+    if (cur_x != cs_x || cur_y != cs_y) {
+        glfwSetWindowPos(g_overlay_window, cs_x, cs_y);
     }
     glfwSetWindowAttrib(g_overlay_window, GLFW_FLOATING, GLFW_TRUE);
 #ifdef GLFW_MOUSE_PASSTHROUGH
@@ -157,14 +223,15 @@ bool Menu::Setup() {
     ImGui_ImplGlfw_InitForOpenGL(g_window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
-    // Click-through transparent fullscreen overlay for the crosshair.
-    GLFWmonitor* primary = glfwGetPrimaryMonitor();
-    const GLFWvidmode* mode = primary ? glfwGetVideoMode(primary) : nullptr;
-    int monitor_x = 0, monitor_y = 0;
-    if (primary) glfwGetMonitorPos(primary, &monitor_x, &monitor_y);
-    if (mode) {
-        g_screen_width = mode->width;
-        g_screen_height = mode->height;
+    // X11 connection used to locate the CS2 window by PID so the overlay
+    // can be sized/positioned exactly over the CS2 game window.
+    g_x_display = XOpenDisplay(nullptr);
+    if (g_x_display) {
+        g_atom_net_wm_pid = XInternAtom(g_x_display, "_NET_WM_PID", False);
+        g_atom_net_wm_state = XInternAtom(g_x_display, "_NET_WM_STATE", False);
+        g_atom_net_wm_state_above = XInternAtom(g_x_display, "_NET_WM_STATE_ABOVE", False);
+        g_atom_net_wm_window_type = XInternAtom(g_x_display, "_NET_WM_WINDOW_TYPE", False);
+        g_atom_net_wm_window_type_dock = XInternAtom(g_x_display, "_NET_WM_WINDOW_TYPE_DOCK", False);
     }
 
     glfwDefaultWindowHints();
@@ -184,7 +251,6 @@ bool Menu::Setup() {
     g_overlay_window = glfwCreateWindow(g_screen_width, g_screen_height,
                                         "Crosshair", nullptr, nullptr);
     if (g_overlay_window) {
-        glfwSetWindowPos(g_overlay_window, monitor_x, monitor_y);
         glfwSetWindowAttrib(g_overlay_window, GLFW_FLOATING, GLFW_TRUE);
 #ifdef GLFW_MOUSE_PASSTHROUGH
         glfwSetWindowAttrib(g_overlay_window, GLFW_MOUSE_PASSTHROUGH, GLFW_TRUE);
@@ -216,7 +282,12 @@ void Menu::Shutdown() {
     
     // Завершаем GLFW
     glfwTerminate();
-    
+
+    if (g_x_display) {
+        XCloseDisplay(g_x_display);
+        g_x_display = nullptr;
+    }
+
     // Устанавливаем флаг остановки
     g_running = false;
 }
@@ -441,4 +512,8 @@ void Menu::SetWindowSize(int width, int height) {
     if (!g_minimized) {
         glfwSetWindowSize(g_window, width, height);
     }
+}
+
+void Menu::SetCS2Pid(uint32_t pid) {
+    g_cs2_pid = pid;
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 class Menu {
 public:
     static bool Setup();
@@ -15,4 +17,5 @@ public:
     static void SetCurrentFPS(float fps);
     static float GetCurrentFPS();
     static void SetWindowSize(int width, int height);
+    static void SetCS2Pid(uint32_t pid);
 };
