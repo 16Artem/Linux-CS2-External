@@ -8,6 +8,8 @@ public:
     static bool IsRunning();
     static void SetWallhackEnabled(bool enabled);
     static bool IsWallhackEnabled();
+    static void SetCrosshairEnabled(bool enabled);
+    static bool IsCrosshairEnabled();
     static void SetVisible(bool visible);
     static bool IsVisible();
     static void SetCurrentFPS(float fps);
