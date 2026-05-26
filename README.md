@@ -2,7 +2,7 @@
 
 WH memory patch for CS2 on Linux.
 
-![Menu](https://github.com/islavikfx/Linux-CS2-External/blob/main/img/input.png?raw=true)
+![Menu](https://github.com/16Artem/Linux-CS2-External/blob/main/img/input.png?raw=true)
 
 ### Features:
 - **Wallhack (WH)**: See enemies through walls with glow effect
